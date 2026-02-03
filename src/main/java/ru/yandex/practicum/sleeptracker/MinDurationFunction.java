@@ -11,7 +11,7 @@ public class MinDurationFunction implements SleepAnalysisFunction {
                 .map(SleepingSession::getDurationInMinutes)
                 .min(Comparator.naturalOrder());
 
-        return new SleepAnalysisResult<>("Минимальная продолжительность сессии (минут)",
+        return new SleepAnalysisResult<>(AnalysisDescriptions.MIN_DURATION,
                 minDuration.orElse(0L));
     }
 }

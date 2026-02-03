@@ -10,6 +10,6 @@ public class MaxDurationFunction implements SleepAnalysisFunction {
                 .max(Long::compare)
                 .orElse(0L);
 
-        return new SleepAnalysisResult<>("Максимальная продолжительность сессии (минут)", maxDuration);
+        return new SleepAnalysisResult<>(AnalysisDescriptions.MAX_DURATION, maxDuration);
     }
 }

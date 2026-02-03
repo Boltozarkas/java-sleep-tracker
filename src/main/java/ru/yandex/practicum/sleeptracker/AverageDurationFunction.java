@@ -10,7 +10,7 @@ public class AverageDurationFunction implements SleepAnalysisFunction {
                 .average()
                 .orElse(0.0);
 
-        return new SleepAnalysisResult<>("Средняя продолжительность сессии (минут)",
+        return new SleepAnalysisResult<>(AnalysisDescriptions.AVG_DURATION,
                 Math.round(averageDuration * 100.0) / 100.0);
     }
 }

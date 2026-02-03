@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class SleepTrackerApp {
-//Привет!=)
+    //Привет!=)
     public static void main(String[] args) {
         // Проверяем, есть ли аргумент с путем к файлу
         if (args.length < 1) {
@@ -55,16 +55,12 @@ public class SleepTrackerApp {
 
     // Метод для чтения данных о сне из файла
     private static List<SleepingSession> readSleepData(String filename) {
-        try {
-            // Читаем все строки из файла
-            List<String> lines = Files.readAllLines(Paths.get(filename));
-
+        try (var lines = Files.lines(Paths.get(filename))) {
             // Преобразуем каждую строку в объект SleepingSession
-            return lines.stream()
+            return lines
                     .map(SleepTrackerApp::parseSleepSession) // Используем метод для парсинга
                     .filter(session -> session != null)     // Убираем null
                     .collect(Collectors.toList());          // Собираем в список
-
         } catch (IOException e) {
             System.out.println("Ошибка чтения файла: " + e.getMessage());
             return new ArrayList<>();

@@ -13,7 +13,8 @@ public class ChronotypeFunction implements SleepAnalysisFunction {
                 .collect(Collectors.toList());
 
         if (nightSessions.isEmpty()) {
-            return new SleepAnalysisResult<>("Хронотип пользователя", "Недостаточно данных");
+            return new SleepAnalysisResult<>(AnalysisDescriptions.CHRONOTYPE,
+                    AnalysisDescriptions.INSUFFICIENT_DATA);
         }
 
         // Подсчитываем количество каждого хронотипа
@@ -42,6 +43,7 @@ public class ChronotypeFunction implements SleepAnalysisFunction {
             resultChronotype = Chronotype.DOVE;
         }
 
-        return new SleepAnalysisResult<>("Хронотип пользователя", resultChronotype.getDisplayName());
+        return new SleepAnalysisResult<>(AnalysisDescriptions.CHRONOTYPE,
+                resultChronotype.getDisplayName());
     }
 }

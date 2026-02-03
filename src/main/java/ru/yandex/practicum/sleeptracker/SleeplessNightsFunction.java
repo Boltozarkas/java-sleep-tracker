@@ -2,78 +2,97 @@ package ru.yandex.practicum.sleeptracker;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Period;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 public class SleeplessNightsFunction implements SleepAnalysisFunction {
+
     @Override
     public SleepAnalysisResult<Long> analyze(List<SleepingSession> sessions) {
         if (sessions.isEmpty()) {
-            return new SleepAnalysisResult<>("Количество бессонных ночей", 0L);
+            return new SleepAnalysisResult<>(AnalysisDescriptions.SLEEPLESS_NIGHTS, 0L);
         }
 
-        // Находим даты всех ночных сессий сна
+        // 1. Находим все ночи, когда был сон
         Set<LocalDate> nightsWithSleep = sessions.stream()
-                .filter(session -> {
-                    LocalDateTime start = session.getSleepStart();
-                    LocalDateTime end = session.getSleepEnd();
-
-                    // Проверяем, пересекается ли сессия с ночным временем (0:00-6:00)
-                    // Если сон начинается до 6 утра или заканчивается после полуночи
-                    if (start.getHour() < 6 || end.getHour() >= 0) {
-                        // Проверяем, что сон действительно ночной
-                        // (пересекается с интервалом 0:00-6:00)
-                        LocalDate sleepDate = start.toLocalDate();
-                        LocalDateTime nightStart = sleepDate.atStartOfDay();
-                        LocalDateTime nightEnd = sleepDate.atTime(6, 0);
-
-                        // Проверяем пересечение интервалов
-                        boolean startsBeforeNightEnd = start.isBefore(nightEnd);
-                        boolean endsAfterNightStart = end.isAfter(nightStart);
-
-                        return startsBeforeNightEnd && endsAfterNightStart;
-                    }
-                    return false;
-                })
-                .map(session -> {
-                    // Для сна, начавшегося вечером и закончившегося утром,
-                    // считаем ночью дату, когда начался сон
-                    LocalDateTime start = session.getSleepStart();
-                    if (start.getHour() >= 18) {
-                        return start.toLocalDate();
-                    } else {
-                        // Если сон начался ночью (после 0:00), это предыдущая дата
-                        return start.minusDays(1).toLocalDate();
-                    }
-                })
+                .filter(SleepingSession::isNightSleep) // Фильтруем только ночные сессии
+                .map(this::getNightDateForSession)     // Получаем дату ночи для каждой сессии
                 .collect(Collectors.toSet());
 
-        // Находим общее количество ночей в периоде логирования
-        LocalDateTime firstSleep = sessions.get(0).getSleepStart();
-        LocalDateTime lastSleep = sessions.get(sessions.size() - 1).getSleepEnd();
+        // 2. Находим весь период логирования
+        LocalDateTime firstDateTime = sessions.get(0).getSleepStart();
+        LocalDateTime lastDateTime = sessions.get(sessions.size() - 1).getSleepEnd();
 
-        // Определяем начальную и конечную даты для подсчета ночей
-        LocalDate startDate = firstSleep.toLocalDate();
-        if (firstSleep.getHour() >= 12) {
-            startDate = startDate.plusDays(1); // Следующая ночь
+        // 3. Определяем первую и последнюю ночь для анализа
+        LocalDate firstNight = getFirstNightDate(firstDateTime);
+        LocalDate lastNight = getLastNightDate(lastDateTime);
+
+        // 4. Если первая ночь позже последней, возвращаем 0
+        if (firstNight.isAfter(lastNight)) {
+            return new SleepAnalysisResult<>(AnalysisDescriptions.SLEEPLESS_NIGHTS, 0L);
         }
 
-        LocalDate endDate = lastSleep.toLocalDate();
+        // 5. Создаем поток всех ночей в периоде
+        long totalNights = ChronoUnit.DAYS.between(firstNight, lastNight) + 1;
 
-        // Генерируем все даты в интервале
-        Set<LocalDate> allNights = IntStream.iterate(0, i -> i + 1)
-                .limit(Period.between(startDate, endDate.plusDays(1)).getDays())
-                .mapToObj(startDate::plusDays)
-                .collect(Collectors.toSet());
+        // 6. Считаем бессонные ночи
+        long sleeplessNights = IntStream.range(0, (int) totalNights)
+                .mapToObj(i -> firstNight.plusDays(i)) // Генерируем все даты ночей
+                .filter(night -> !nightsWithSleep.contains(night)) // Оставляем только бессонные
+                .count(); // Считаем количество
 
-        // Бессонные ночи = все ночи - ночи со сном
-        long sleeplessNights = allNights.stream()
-                .filter(night -> !nightsWithSleep.contains(night))
-                .count();
+        return new SleepAnalysisResult<>(AnalysisDescriptions.SLEEPLESS_NIGHTS, sleeplessNights);
+    }
 
-        return new SleepAnalysisResult<>("Количество бессонных ночей", sleeplessNights);
+    private LocalDate getNightDateForSession(SleepingSession session) {
+        // Ночью считается дата, когда наступает полночь (0:00)
+        // Если сон пересекает полночь, то это ночь той даты, когда наступает 0:00
+
+        LocalDateTime sleepStart = session.getSleepStart();
+        LocalDateTime sleepEnd = session.getSleepEnd();
+
+        // Проверяем, пересекает ли сон полночь
+        // Если время начала и окончания сна в разные дни
+        if (!sleepStart.toLocalDate().equals(sleepEnd.toLocalDate())) {
+            // Сон пересекает полночь - ночь относится к дате, когда начался сон
+            return sleepStart.toLocalDate();
+        }
+
+        // Сон в пределах одного дня
+        // Если сон начался вечером (после 18:00) - это ночь этой даты
+        if (sleepStart.getHour() >= 18) {
+            return sleepStart.toLocalDate();
+        } else {
+            // Если сон начался утром или днем - это ночь предыдущей даты
+            return sleepStart.toLocalDate().minusDays(1);
+        }
+    }
+
+    private LocalDate getFirstNightDate(LocalDateTime firstDateTime) {
+        // Определяем первую ночь для анализа
+        LocalDate firstDate = firstDateTime.toLocalDate();
+
+        if (firstDateTime.getHour() >= SleepingSession.NOON_HOUR) {
+            // Если первая запись после 12:00, первая ночь - следующая
+            return firstDate.plusDays(1);
+        } else {
+            // Если первая запись до 12:00, первая ночь - сегодняшняя
+            return firstDate;
+        }
+    }
+
+    private LocalDate getLastNightDate(LocalDateTime lastDateTime) {
+        // Последняя ночь - это ночь даты последней записи
+        // Но если последняя запись утром (до 12:00), это ночь предыдущей даты
+        LocalDate lastDate = lastDateTime.toLocalDate();
+
+        if (lastDateTime.getHour() < SleepingSession.NOON_HOUR) {
+            return lastDate.minusDays(1);
+        } else {
+            return lastDate;
+        }
     }
 }
